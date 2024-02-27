@@ -41,6 +41,16 @@
 
 typedef char *sds;
 
+// __attribute__ ((packed)) 让编译器以紧凑模式分配内存，进行内存对齐，
+// 以此保证 header 和 sds 的数据部分紧紧的相邻
+// 这样，buf 的内存地址就可以直接通过 sdshdr 地址加 hdr 大小计算
+
+// sdshdr
+// len: 字符串实际长度
+// alloc: 字符串的分配容量，也是最大容量，不包含 hdr 和最后的 '\0'
+// flags: 低 3 位表示 hdr 类型， 后面 5 位每种不同
+// buf: 柔性数组，不占位置，用来定位，分配内存的时候直接分配 hdr + buf 长度的连续内存空间，通过 buf 即可访问到后半段空间开头。
+
 /* Note: sdshdr5 is never used, we just access the flags byte directly.
  * However is here to document the layout of type 5 SDS strings. */
 struct __attribute__ ((__packed__)) sdshdr5 {
@@ -72,17 +82,25 @@ struct __attribute__ ((__packed__)) sdshdr64 {
     char buf[];
 };
 
+// sds 类型定义，sdr flags 前3位
 #define SDS_TYPE_5  0
 #define SDS_TYPE_8  1
 #define SDS_TYPE_16 2
 #define SDS_TYPE_32 3
 #define SDS_TYPE_64 4
+// sds 类型掩码,
+// flags & SDS_TYPE_MASK 即可得到类型值
 #define SDS_TYPE_MASK 7
+// 类型占用的比特位数
 #define SDS_TYPE_BITS 3
+// 根据字符串指针，向前偏移得到 sds hdr 的指针，存储到 sh 变量里面
 #define SDS_HDR_VAR(T,s) struct sdshdr##T *sh = (void*)((s)-(sizeof(struct sdshdr##T)));
 #define SDS_HDR(T,s) ((struct sdshdr##T *)((s)-(sizeof(struct sdshdr##T))))
+// 根据 flags 获取 sds 5 的长度，sds5 的 flags 高 5 位表示长度
 #define SDS_TYPE_5_LEN(f) ((f)>>SDS_TYPE_BITS)
 
+
+// 获取 sds 的长度
 static inline size_t sdslen(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {

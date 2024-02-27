@@ -38,6 +38,7 @@
 #include "sds.h"
 #include "sdsalloc.h"
 
+// 根据 sds type 获取对应的 hdr size
 static inline int sdsHdrSize(char type) {
     switch(type&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
@@ -54,15 +55,21 @@ static inline int sdsHdrSize(char type) {
     return 0;
 }
 
+// 根据 size 得到 sds 的类型
 static inline char sdsReqType(size_t string_size) {
     if (string_size < 1<<5)
+    // 不超过 31 字节的字符串使用 SDS_TYPE_5
         return SDS_TYPE_5;
     if (string_size < 1<<8)
+    // 不超过 255 字节的字符串使用 SDS_TYPE_8
         return SDS_TYPE_8;
     if (string_size < 1<<16)
+    // 不超过 65,535 字节的字符串使用 SDS_TYPE_16
         return SDS_TYPE_16;
     if (string_size < 1ll<<32)
+    // 不超过 4,294,967,295 字节的字符串使用 SDS_TYPE_32
         return SDS_TYPE_32;
+    // 更大的字符串使用 SDS_TYPE_64
     return SDS_TYPE_64;
 }
 
@@ -78,24 +85,31 @@ static inline char sdsReqType(size_t string_size) {
  * You can print the string with printf() as there is an implicit \0 at the
  * end of the string. However the string is binary safe and can contain
  * \0 characters in the middle, as the length is stored in the sds header. */
+// 通过给定的内容和长度，创建一个 sds
 sds sdsnewlen(const void *init, size_t initlen) {
     void *sh;
     sds s;
     char type = sdsReqType(initlen);
     /* Empty strings are usually created in order to append. Use type 8
      * since type 5 is not good at this. */
+     // 如果是创建空字符串，一般是为了追加，改用 SDS_TYPE_8
     if (type == SDS_TYPE_5 && initlen == 0) type = SDS_TYPE_8;
     int hdrlen = sdsHdrSize(type);
+    // flag 指针
     unsigned char *fp; /* flags pointer. */
 
+    // 申请一个足够长度的指针, 额外申请 1 用来放 '\0'
     sh = s_malloc(hdrlen+initlen+1);
-    if (!init)
+    if (!init) // 如果给的数据是空的，置空新申请的空间
         memset(sh, 0, hdrlen+initlen+1);
-    if (sh == NULL) return NULL;
+    if (sh == NULL) return NULL; // 申请失败，返回 NULL
+    // sds 直接指向 buf 的位置，方便和 c 字符串内存格式对齐
     s = (char*)sh+hdrlen;
+    // buf 往后移动一个 char* 指针的位置，就是 flags 的起始地址
     fp = ((unsigned char*)s)-1;
     switch(type) {
-        case SDS_TYPE_5: {
+        case SDS_TYPE_5: { // 0
+            // type 放低3位，len 放高 5 位
             *fp = type | (initlen << SDS_TYPE_BITS);
             break;
         }
@@ -103,7 +117,7 @@ sds sdsnewlen(const void *init, size_t initlen) {
             SDS_HDR_VAR(8,s);
             sh->len = initlen;
             sh->alloc = initlen;
-            *fp = type;
+            *fp = type; // 高 5 位暂时不需要赋值其他东西，直接赋值
             break;
         }
         case SDS_TYPE_16: {
@@ -128,8 +142,9 @@ sds sdsnewlen(const void *init, size_t initlen) {
             break;
         }
     }
-    if (initlen && init)
+    if (initlen && init) // 如果给定了初始内容，copy 到新 sds 里面
         memcpy(s, init, initlen);
+    // 最后加 '\0'，兼容 c 字符串
     s[initlen] = '\0';
     return s;
 }
