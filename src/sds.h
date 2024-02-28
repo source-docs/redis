@@ -118,6 +118,7 @@ static inline size_t sdslen(const sds s) {
     return 0;
 }
 
+// 获取空闲可用空间
 static inline size_t sdsavail(const sds s) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
@@ -144,12 +145,15 @@ static inline size_t sdsavail(const sds s) {
     return 0;
 }
 
+// 设置 sds 的长度
 static inline void sdssetlen(sds s, size_t newlen) {
     unsigned char flags = s[-1];
     switch(flags&SDS_TYPE_MASK) {
         case SDS_TYPE_5:
             {
+                // flags
                 unsigned char *fp = ((unsigned char*)s)-1;
+                // flags 低3位保存长度
                 *fp = SDS_TYPE_5 | (newlen << SDS_TYPE_BITS);
             }
             break;
